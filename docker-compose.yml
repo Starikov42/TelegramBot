@@ -1,0 +1,81 @@
+version: '2.1'  
+services:
+  recruiter_bot:
+    container_name: recruiter_bot
+    env_file: ./recruiter_bot/deployment/.env
+    restart: always
+    build:
+      context: ./recruiter_bot/
+      dockerfile: ./deployment/Dockerfile
+    environment:
+      - PRODUCTION=True
+      - POSTGRES_IP=dbhost
+      
+      # Point to application instance/reserve proxy
+      - APPLICATION_IP=159.65.57.62
+      - APPLICATION_PORT=5000
+      - RESERVE_PROXY_PORT=443
+      
+      # Point to IC application instance/reserve proxy
+      - IMAGE_CONTROLLER_PORT=7002
+      - IMAGE_CONTROLLER_IP=159.65.57.62
+      
+      # Point to PS application instance/reserve proxy
+      - PAYMENT_SERVICE_PORT=7001
+      - PAYMENT_SERVICE_IP=159.65.57.62
+    extra_hosts:
+      - "dbhost:159.65.57.62"
+    ports:
+      - "5000:5000"
+  
+  payment_service:
+    container_name: payment_service
+    restart: always
+    env_file: ./payment_service/deployment/.env
+    environment:
+      - PRODUCTION=True
+      - POSTGRES_IP=dbhost
+      
+      - RESERVE_PROXY_PORT=7001
+      - APPLICATION_IP=159.65.57.62
+      - APPLICATION_PORT=5001
+    build:
+      context: ./payment_service/
+      dockerfile: ./deployment/Dockerfile
+    extra_hosts:
+      - "dbhost:159.65.57.62"
+    ports:
+      - "5001:5001"
+
+  image_controller:
+    container_name: image_controller
+    restart: always
+    env_file: ./image_controller/deployment/.env
+    environment:
+      - PRODUCTION=True
+      - PORT=5002
+    build:
+      context: ./image_controller/
+      dockerfile: ./deployment/Dockerfile
+    volumes:
+      - /var/www/static/images/:/static/images/
+    ports:
+      - "5002:5002"
+
+  ngnix:
+    container_name: nginx_balancer
+    network_mode: "host"
+    restart: always
+    build:
+      context: ./nginx/
+      dockerfile: Dockerfile
+    volumes:
+      - /var/www/static/images/:/static/images/
+      - /etc/ssl/:/etc/ssl/
+    ports:
+      - "80:80"
+      - "443:443"
+      - "7001:7001"
+      - "7002:7002"
+    depends_on:
+      - recruiter_bot
